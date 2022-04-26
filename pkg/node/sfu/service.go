@@ -7,8 +7,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/pion/ion-log"
 	"github.com/bep/debounce"
+	"github.com/pion/ion-log"
 	ion_sfu_log "github.com/pion/ion-sfu/pkg/logger"
 	"github.com/pion/ion-sfu/pkg/middlewares/datachannel"
 	"github.com/pion/ion-sfu/pkg/sfu"
@@ -40,6 +40,16 @@ func NewSFUService(conf ion_sfu.Config) *SFUService {
 		sigs: make(map[string]rtc.RTC_SignalServer),
 	}
 	sfu := ion_sfu.NewSFU(conf)
+	dc := sfu.NewDatachannel(ion_sfu.APIChannelLabel)
+	dc.Use(datachannel.SubscriberAPI)
+	s.sfu = sfu
+	return s
+}
+
+func NewSFUServiceWithSFU(sfu *ion_sfu.SFU) *SFUService {
+	s := &SFUService{
+		sigs: make(map[string]rtc.RTC_SignalServer),
+	}
 	dc := sfu.NewDatachannel(ion_sfu.APIChannelLabel)
 	dc.Use(datachannel.SubscriberAPI)
 	s.sfu = sfu
