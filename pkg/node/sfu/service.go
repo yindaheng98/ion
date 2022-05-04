@@ -238,35 +238,36 @@ func (s *SFUService) Signal(sig rtc.RTC_SignalServer) error {
 				Type: webrtc.NewSDPType(payload.Join.Description.Type),
 			}
 
-			log.Debugf("[C=>S] join.description: offer %v", desc.SDP)
-			answer, err := peer.Answer(desc)
-			if err != nil {
-				return status.Errorf(codes.Internal, fmt.Sprintf("answer error: %v", err))
-			}
-
-			// send answer
-			log.Debugf("[S=>C] join.description: answer %v", answer.SDP)
-
-			err = sig.Send(&rtc.Reply{
-				Payload: &rtc.Reply_Join{
-					Join: &rtc.JoinReply{
-						Success: true,
-						Error:   nil,
-						Description: &rtc.SessionDescription{
-							Target: rtc.Target(rtc.Target_PUBLISHER),
-							Sdp:    answer.SDP,
-							Type:   answer.Type.String(),
-						},
-					},
-				},
-			})
-			if err != nil {
-				log.Errorf("signal send error: %v", err)
-			}
-
 			publisher := peer.Publisher()
 
 			if publisher != nil {
+
+				log.Debugf("[C=>S] join.description: offer %v", desc.SDP)
+				answer, err := peer.Answer(desc)
+				if err != nil {
+					return status.Errorf(codes.Internal, fmt.Sprintf("answer error: %v", err))
+				}
+
+				// send answer
+				log.Debugf("[S=>C] join.description: answer %v", answer.SDP)
+
+				err = sig.Send(&rtc.Reply{
+					Payload: &rtc.Reply_Join{
+						Join: &rtc.JoinReply{
+							Success: true,
+							Error:   nil,
+							Description: &rtc.SessionDescription{
+								Target: rtc.Target(rtc.Target_PUBLISHER),
+								Sdp:    answer.SDP,
+								Type:   answer.Type.String(),
+							},
+						},
+					},
+				})
+				if err != nil {
+					log.Errorf("signal send error: %v", err)
+				}
+
 				var once sync.Once
 				publisher.OnPublisherTrack(func(pt ion_sfu.PublisherTrack) {
 					log.Debugf("[S=>C] OnPublisherTrack: \nKind %v, \nUid: %v,  \nMsid: %v,\nTrackID: %v", pt.Track.Kind(), uid, pt.Track.Msid(), pt.Track.ID())
