@@ -110,13 +110,15 @@ func (s *SFUService) Signal(sig rtc.RTC_SignalServer) error {
 			}
 
 			// Remove down tracks that other peers subscribed from this peer
-			for _, downTrack := range peer.Subscriber().DownTracks() {
-				streamID := downTrack.StreamID()
-				for _, t := range tracksInfo {
-					if downTrack != nil && downTrack.ID() == t.Id {
-						log.Infof("remove down track[%v] from peer[%v]", downTrack.ID(), peer.ID())
-						peer.Subscriber().RemoveDownTrack(streamID, downTrack)
-						_ = downTrack.Stop()
+			if peer.Subscriber() != nil {
+				for _, downTrack := range peer.Subscriber().DownTracks() {
+					streamID := downTrack.StreamID()
+					for _, t := range tracksInfo {
+						if downTrack != nil && downTrack.ID() == t.Id {
+							log.Infof("remove down track[%v] from peer[%v]", downTrack.ID(), peer.ID())
+							peer.Subscriber().RemoveDownTrack(streamID, downTrack)
+							_ = downTrack.Stop()
+						}
 					}
 				}
 			}
@@ -305,7 +307,7 @@ func (s *SFUService) Signal(sig rtc.RTC_SignalServer) error {
 
 			for _, p := range peer.Session().Peers() {
 				var peerTracks []*rtc.TrackInfo
-				if peer.ID() != p.ID() {
+				if peer.ID() != p.ID() && p.Publisher() != nil {
 					pubTracks := p.Publisher().PublisherTracks()
 					if len(pubTracks) == 0 {
 						continue
@@ -453,52 +455,56 @@ func (s *SFUService) Signal(sig rtc.RTC_SignalServer) error {
 			log.Debugf("[C=>S] subscription: %v", payload.Subscription)
 			subscription := payload.Subscription
 			needNegotiate := false
-			for _, trackInfo := range subscription.Subscriptions {
-				if trackInfo.Subscribe {
-					// Add down tracks
-					for _, p := range peer.Session().Peers() {
-						if p.ID() != peer.ID() {
-							for _, track := range p.Publisher().PublisherTracks() {
-								if track.Receiver.TrackID() == trackInfo.TrackId && track.Track.RID() == trackInfo.Layer {
-									log.Infof("Add RemoteTrack: %v to peer %v %v %v", trackInfo.TrackId, peer.ID(), track.Track.Kind(), track.Track.RID())
-									dt, err := peer.Publisher().GetRouter().AddDownTrack(peer.Subscriber(), track.Receiver)
-									if err != nil {
-										log.Errorf("AddDownTrack error: %v", err)
+			if peer.Subscriber() != nil {
+
+				for _, trackInfo := range subscription.Subscriptions {
+					if trackInfo.Subscribe {
+						// Add down tracks
+						for _, p := range peer.Session().Peers() {
+							if p.ID() != peer.ID() && p.Publisher() != nil {
+								for _, track := range p.Publisher().PublisherTracks() {
+									if track.Receiver.TrackID() == trackInfo.TrackId && track.Track.RID() == trackInfo.Layer {
+										log.Infof("Add RemoteTrack: %v to peer %v %v %v", trackInfo.TrackId, peer.ID(), track.Track.Kind(), track.Track.RID())
+										dt, err := peer.Publisher().GetRouter().AddDownTrack(peer.Subscriber(), track.Receiver)
+										if err != nil {
+											log.Errorf("AddDownTrack error: %v", err)
+										}
+										// switchlayer
+										switch trackInfo.Layer {
+										case "f":
+											dt.Mute(false)
+											_ = dt.SwitchSpatialLayer(2, true)
+											log.Infof("%v SwitchSpatialLayer:  2", trackInfo.TrackId)
+										case "h":
+											dt.Mute(false)
+											_ = dt.SwitchSpatialLayer(1, true)
+											log.Infof("%v SwitchSpatialLayer:  1", trackInfo.TrackId)
+										case "q":
+											dt.Mute(false)
+											_ = dt.SwitchSpatialLayer(0, true)
+											log.Infof("%v SwitchSpatialLayer:  0", trackInfo.TrackId)
+										}
+										needNegotiate = true
 									}
-									// switchlayer
-									switch trackInfo.Layer {
-									case "f":
-										dt.Mute(false)
-										_ = dt.SwitchSpatialLayer(2, true)
-										log.Infof("%v SwitchSpatialLayer:  2", trackInfo.TrackId)
-									case "h":
-										dt.Mute(false)
-										_ = dt.SwitchSpatialLayer(1, true)
-										log.Infof("%v SwitchSpatialLayer:  1", trackInfo.TrackId)
-									case "q":
-										dt.Mute(false)
-										_ = dt.SwitchSpatialLayer(0, true)
-										log.Infof("%v SwitchSpatialLayer:  0", trackInfo.TrackId)
-									}
-									needNegotiate = true
 								}
 							}
 						}
-					}
-				} else {
-					// Remove down tracks
-					for _, downTrack := range peer.Subscriber().DownTracks() {
-						streamID := downTrack.StreamID()
-						if downTrack != nil && downTrack.ID() == trackInfo.TrackId {
-							peer.Subscriber().RemoveDownTrack(streamID, downTrack)
-							_ = downTrack.Stop()
-							needNegotiate = true
+					} else {
+						// Remove down tracks
+						for _, downTrack := range peer.Subscriber().DownTracks() {
+							streamID := downTrack.StreamID()
+							if downTrack != nil && downTrack.ID() == trackInfo.TrackId {
+								peer.Subscriber().RemoveDownTrack(streamID, downTrack)
+								_ = downTrack.Stop()
+								needNegotiate = true
+							}
 						}
 					}
 				}
-			}
-			if needNegotiate {
-				peer.Subscriber().Negotiate()
+
+				if needNegotiate {
+					peer.Subscriber().Negotiate()
+				}
 			}
 
 			_ = sig.Send(&rtc.Reply{
