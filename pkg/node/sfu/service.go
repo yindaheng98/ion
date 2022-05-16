@@ -235,14 +235,14 @@ func (s *SFUService) Signal(sig rtc.RTC_SignalServer) error {
 				}
 			}
 
-			desc := webrtc.SessionDescription{
-				SDP:  payload.Join.Description.Sdp,
-				Type: webrtc.NewSDPType(payload.Join.Description.Type),
-			}
-
 			publisher := peer.Publisher()
 
 			if publisher != nil {
+
+				desc := webrtc.SessionDescription{
+					SDP:  payload.Join.Description.Sdp,
+					Type: webrtc.NewSDPType(payload.Join.Description.Type),
+				}
 
 				log.Debugf("[C=>S] join.description: offer %v", desc.SDP)
 				answer, err := peer.Answer(desc)
