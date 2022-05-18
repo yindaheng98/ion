@@ -71,7 +71,7 @@ func (n *Node) KeepAlive(node discovery.Node) error {
 	return n.ndc.KeepAlive(node)
 }
 
-func (n *Node) NewNatsRPCClient(service, peerNID string, parameters map[string]interface{}) (*nrpc.Client, error) {
+func (n *Node) NewNatsRPCClientWithID(service, peerNID string, parameters map[string]interface{}) (*nrpc.Client, string, error) {
 	var cli *nrpc.Client = nil
 	selfNID := n.NID
 	for id, node := range n.neighborNodes {
@@ -84,12 +84,12 @@ func (n *Node) NewNatsRPCClient(service, peerNID string, parameters map[string]i
 		resp, err := n.ndc.Get(service, parameters)
 		if err != nil {
 			log.Errorf("failed to Get service [%v]: %v", service, err)
-			return nil, err
+			return nil, "", err
 		}
 
 		if len(resp.Nodes) == 0 {
 			err := fmt.Errorf("get service [%v], node cnt == 0", service)
-			return nil, err
+			return nil, "", err
 		}
 
 		cli = nrpc.NewClient(n.nc, resp.Nodes[0].NID, selfNID)
@@ -97,8 +97,21 @@ func (n *Node) NewNatsRPCClient(service, peerNID string, parameters map[string]i
 
 	n.cliLock.Lock()
 	defer n.cliLock.Unlock()
-	n.clis[util.RandomString(12)] = cli
-	return cli, nil
+	ID := util.RandomString(12)
+	n.clis[ID] = cli
+	return cli, ID, nil
+}
+
+func (n *Node) NewNatsRPCClient(service, peerNID string, parameters map[string]interface{}) (*nrpc.Client, error) {
+	cli, _, err := n.NewNatsRPCClientWithID(service, peerNID, parameters)
+	return cli, err
+}
+
+func (n *Node) NatsRPCClientByID(ID string) (*nrpc.Client, bool) {
+	n.cliLock.Lock()
+	defer n.cliLock.Unlock()
+	cli, ok := n.clis[ID]
+	return cli, ok
 }
 
 //Watch the neighbor nodes
