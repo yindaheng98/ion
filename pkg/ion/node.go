@@ -92,7 +92,16 @@ func (n *Node) NewNatsRPCClientWithID(service, peerNID string, parameters map[st
 			return nil, "", err
 		}
 
-		cli = nrpc.NewClient(n.nc, resp.Nodes[0].NID, selfNID)
+		for _, node := range resp.Nodes {
+			if node.NID == peerNID || peerNID == "*" {
+				cli = nrpc.NewClient(n.nc, node.NID, selfNID)
+			}
+		}
+	}
+
+	if cli == nil {
+		err := fmt.Errorf("get service [%v], but no %s", service, peerNID)
+		return nil, "", err
 	}
 
 	n.cliLock.Lock()
